@@ -30,3 +30,22 @@ usage:
             base-revision: main
             config-path: .circleci/continue-config.yml
             mapping: .circleci/mapping.conf
+        - path-filtering/filter:
+            base-revision: main
+            # This tag reference will be used if the triggering commit is also tagged.
+            tag-reference: /^release.*/
+            config-path: ./circleci/continue-config.yml
+            mapping: |
+              src/api.* api-changes true
+              src/ui.* ui-changes true
+              src/unit.tests.* unit-test-changes true
+              src/integration.tests.* integration-test-changes true
+            # These filters allow for tagged triggering
+            filters:
+              tags:
+                only:
+                  - /.*/
+              branches:
+                only:
+                  - /.*/
+

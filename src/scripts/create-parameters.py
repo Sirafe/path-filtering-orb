@@ -37,30 +37,33 @@ def is_valid_regex(string):
   except re.error:
     return False
 
+def compare_tags(ref_tag, *tags):
+  if all(re.match(ref_tag.strip("/"), tag) for tag in tags):
+    return True
+  return False
+
 def get_previous_tagged_commit(ref_tag, head_tag):
   if not is_valid_regex(ref_tag):
       raise Exception('Invalid regex provided: "{}"'.format(ref_tag))
 
-  rx = re.compile(ref_tag.strip("/"))
-  if rx.match(head_tag):
-      last_tag_hash = subprocess.run(
-        ['git', 'rev-list', '--tags', '--skip=1', '--max-count=1'],
-        check=True,
-        capture_output=True
-      ).stdout.decode('utf-8').strip()
+  last_tag_hash = subprocess.run(
+    ['git', 'rev-list', '--tags', '--skip=1', '--max-count=1'],
+    check=True,
+    capture_output=True
+  ).stdout.decode('utf-8').strip()
 
-      tag_label = subprocess.run(
-        ['git', 'describe', '--abbrev=0', '--tags', last_tag_hash],
-        check=True,
-        capture_output=True
-      ).stdout.decode('utf-8').strip()
+  tag_label = subprocess.run(
+    ['git', 'describe', '--abbrev=0', '--tags', last_tag_hash],
+    check=True,
+    capture_output=True
+  ).stdout.decode('utf-8').strip()
 
-      if not rx.match(tag_label):
-        raise Exception('The previous tag "{} does not match the reference tag "{}".'.format(tag_label, ref_tag))
+  is_match = compare_tags(ref_tag, tag_label)
 
-      return last_tag_hash, tag_label
+  if not is_match:
+    return None
 
-  raise Exception('Error: The tag "{}" does not match the reference regex "{}".'.format(head_tag, ref_tag))
+  return last_tag_hash, tag_label
 
 
 def changed_files(base, head):
@@ -145,12 +148,17 @@ def is_mapping_line(line: str) -> bool:
   return not (is_comment_line or is_empty_line)
 
 def create_parameters(output_path, config_path, head, base, ref_tag, head_tag, mapping):
-  if head_tag and ref_tag:
-    print('Head tag detected "{}". This is a tagged commit, and a reference tag was supplied.'
-          ' Finding previously tagged commit matching the provided reference tag "{}"'.format(head_tag, ref_tag))
-    base, base_tag = get_previous_tagged_commit(ref_tag, head_tag)
-    print('Base has been set to "{}" with the tag "{}"'.format(base, base_tag))
-
+  if head_tag and ref_tag and compare_tags(ref_tag, head_tag):
+    print(
+      'Head tag detected "{}". This is a tagged commit, a reference tag was supplied, and the current tag matches the provided reference tag. '
+      'Finding previously tagged commit matching the provided reference tag "{}"'.format(head_tag, ref_tag)
+    )
+    result = get_previous_tagged_commit(ref_tag, head_tag) #Get the previous commit, and tag label with a matching tag, or 'None' if the previous tag doesn't match the reference
+    if result is not None:
+      base, base_tag = result
+      print('Base has been set to "{}" with the tag "{}"'.format(base, base_tag))
+    else:
+      print('The previous tag did not match the provided reference tag. We will continue as normal. Comparing as usual.')
 
   checkout(base)  # Checkout base revision to make sure it is available for comparison
   checkout(head)  # return to head commit
