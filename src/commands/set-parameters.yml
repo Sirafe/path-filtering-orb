@@ -9,6 +9,12 @@ parameters:
     description: >
       The revision to compare the current one against for the purpose
       of determining changed files.
+  tag-reference:
+    type: string
+    default: ""
+    description: >
+      Regular expression tag reference for retrieving the tagged revision 
+      to compare the current one against for the purpose of determining changed files.
   mapping:
     type: string
     default: ""
@@ -34,6 +40,7 @@ steps:
       name: Set parameters
       environment:
         BASE_REVISION: << parameters.base-revision >>
+        TAG_REFERENCE: << parameters.tag-reference >>
         MAPPING: << parameters.mapping >>
         OUTPUT_PATH: << parameters.output-path >>
         CONFIG_PATH: << parameters.config-path >>

@@ -30,6 +30,42 @@ def parent_commit():
     capture_output=True
   ).stdout.decode('utf-8').strip()
 
+def is_valid_regex(string):
+  try:
+    re.compile(string)
+    return True
+  except re.error:
+    return False
+
+def get_previous_tagged_commit(ref_tag, head_tag):
+  if not ref_tag:
+      raise Exception('tag-reference cannot be empty when using tagged commits')
+
+  if not is_valid_regex(ref_tag):
+      raise Exception(f'Invalid regex "{ref_tag}"')
+
+  rx = re.compile(ref_tag.strip("/"))
+  if rx.match(head_tag):
+      last_tag_hash = subprocess.run(
+        ['git', 'rev-list', '--tags', '--skip=1', '--max-count=1'],
+        check=True,
+        capture_output=True
+      ).stdout.decode('utf-8').strip()
+
+      tag_label = subprocess.run(
+        ['git', 'describe', '--abbrev=0', '--tags', last_tag_hash],
+        check=True,
+        capture_output=True
+      ).stdout.decode('utf-8').strip()
+
+      if not rx.match(tag_label):
+        raise Exception(f'The previous tag "{tag_label} does not match the reference tag "{ref_tag}".')
+
+      return last_tag_hash, tag_label
+
+  raise Exception(f'Error: The tag "{head_tag}" does not match the reference regex "{ref_tag}".')
+
+
 def changed_files(base, head):
   return subprocess.run(
     ['git', '-c', 'core.quotepath=false', 'diff', '--name-only', base, head],
@@ -111,7 +147,14 @@ def is_mapping_line(line: str) -> bool:
   is_comment_line = (line.strip().startswith("#"))
   return not (is_comment_line or is_empty_line)
 
-def create_parameters(output_path, config_path, head, base, mapping):
+def create_parameters(output_path, config_path, head, base, ref_tag, head_tag, mapping):
+  if head_tag:
+    print(f'Head tag detected "{head_tag}". This is tagged commit finding previously tagged commit matching "{ref_tag}"')
+    """We have a tagged commit we will compare head to the last tagged commit."""
+    base, base_tag = get_previous_tagged_commit(ref_tag, head_tag)
+    print(f'Base has been set to "{base}" with the tag "{base_tag}"')
+
+
   checkout(base)  # Checkout base revision to make sure it is available for comparison
   checkout(head)  # return to head commit
   base = merge_base(base, head)
@@ -153,5 +196,7 @@ if __name__ == "__main__":
     os.environ.get('CONFIG_PATH'),
     os.environ.get('CIRCLE_SHA1'),
     os.environ.get('BASE_REVISION'),
+    os.environ.get('TAG_REFERENCE'),
+    os.environ.get('CIRCLE_TAG'),
     os.environ.get('MAPPING')
   )
