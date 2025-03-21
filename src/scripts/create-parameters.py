@@ -38,11 +38,8 @@ def is_valid_regex(string):
     return False
 
 def get_previous_tagged_commit(ref_tag, head_tag):
-  if not ref_tag:
-      raise Exception('tag-reference cannot be empty when using tagged commits')
-
   if not is_valid_regex(ref_tag):
-      raise Exception(f'Invalid regex "{ref_tag}"')
+      raise Exception('Invalid regex provided: "{}"'.format(ref_tag))
 
   rx = re.compile(ref_tag.strip("/"))
   if rx.match(head_tag):
@@ -59,11 +56,11 @@ def get_previous_tagged_commit(ref_tag, head_tag):
       ).stdout.decode('utf-8').strip()
 
       if not rx.match(tag_label):
-        raise Exception(f'The previous tag "{tag_label} does not match the reference tag "{ref_tag}".')
+        raise Exception('The previous tag "{} does not match the reference tag "{}".'.format(tag_label, ref_tag))
 
       return last_tag_hash, tag_label
 
-  raise Exception(f'Error: The tag "{head_tag}" does not match the reference regex "{ref_tag}".')
+  raise Exception('Error: The tag "{}" does not match the reference regex "{}".'.format(head_tag, ref_tag))
 
 
 def changed_files(base, head):
@@ -148,11 +145,11 @@ def is_mapping_line(line: str) -> bool:
   return not (is_comment_line or is_empty_line)
 
 def create_parameters(output_path, config_path, head, base, ref_tag, head_tag, mapping):
-  if head_tag:
-    print(f'Head tag detected "{head_tag}". This is tagged commit finding previously tagged commit matching "{ref_tag}"')
-    """We have a tagged commit we will compare head to the last tagged commit."""
+  if head_tag and ref_tag:
+    print('Head tag detected "{}". This is a tagged commit, and a reference tag was supplied.'
+          ' Finding previously tagged commit matching the provided reference tag "{}"'.format(head_tag, ref_tag))
     base, base_tag = get_previous_tagged_commit(ref_tag, head_tag)
-    print(f'Base has been set to "{base}" with the tag "{base_tag}"')
+    print('Base has been set to "{}" with the tag "{}"'.format(base, base_tag))
 
 
   checkout(base)  # Checkout base revision to make sure it is available for comparison
