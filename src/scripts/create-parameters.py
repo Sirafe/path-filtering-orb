@@ -158,7 +158,7 @@ def create_parameters(output_path, config_path, head, base, ref_tag, head_tag, m
       base, base_tag = result
       print('Base has been set to "{}" with the tag "{}"'.format(base, base_tag))
     else:
-      print('The previous tag did not match the provided reference tag. We will continue as normal. Comparing as usual.')
+      print('The previous tag did not match the provided reference tag. We will continue as normal.')
 
   checkout(base)  # Checkout base revision to make sure it is available for comparison
   checkout(head)  # return to head commit
