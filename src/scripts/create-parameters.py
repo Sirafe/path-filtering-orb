@@ -38,14 +38,14 @@ def is_valid_regex(string):
     return False
 
 def compare_tags(ref_tag, *tags):
-  if all(re.match(ref_tag.strip("/"), tag) for tag in tags):
-    return True
-  return False
+  if is_valid_regex(ref_tag):
+    if all(re.match(ref_tag.strip("/"), tag) for tag in tags):
+      return True
+    return False
+  else:
+    raise Exception('Invalid regex provided in reference tag "{}"'.format(ref_tag))
 
-def get_previous_tagged_commit(ref_tag, head_tag):
-  if not is_valid_regex(ref_tag):
-      raise Exception('Invalid regex provided: "{}"'.format(ref_tag))
-
+def get_previous_tagged_commit(ref_tag):
   last_tag_hash = subprocess.run(
     ['git', 'rev-list', '--tags', '--skip=1', '--max-count=1'],
     check=True,
@@ -153,7 +153,7 @@ def create_parameters(output_path, config_path, head, base, ref_tag, head_tag, m
       'Head tag detected "{}". This is a tagged commit, a reference tag was supplied, and the current tag matches the provided reference tag. '
       'Finding previously tagged commit matching the provided reference tag "{}"'.format(head_tag, ref_tag)
     )
-    result = get_previous_tagged_commit(ref_tag, head_tag) #Get the previous commit, and tag label with a matching tag, or 'None' if the previous tag doesn't match the reference
+    result = get_previous_tagged_commit(ref_tag) #Get the previous commit, and tag label with a matching tag, or 'None' if the previous tag doesn't match the reference
     if result is not None:
       base, base_tag = result
       print('Base has been set to "{}" with the tag "{}"'.format(base, base_tag))
