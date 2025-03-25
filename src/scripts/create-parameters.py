@@ -2,7 +2,7 @@ import json
 import os
 import re
 import subprocess
-from functools import partial
+from functools import partial, lru_cache
 
 def checkout(revision):
   """
@@ -30,40 +30,68 @@ def parent_commit():
     capture_output=True
   ).stdout.decode('utf-8').strip()
 
+@lru_cache(maxsize=None)
 def is_valid_regex(string):
+  if not is_valid_format(string):
+    return False
   try:
     re.compile(string)
     return True
   except re.error:
     return False
 
+def is_valid_format(string):
+  if not string.startswith('/') or not string.endswith('/'):
+    return False
+  return True
+
 def compare_tags(ref_tag, *tags):
   if is_valid_regex(ref_tag):
-    if all(re.match(ref_tag.strip("/"), tag) for tag in tags):
+    stripped_ref_tag = ref_tag.replace("/")
+    if any(re.match(stripped_ref_tag, tag) for tag in tags):
       return True
     return False
   else:
-    raise Exception('Invalid regex provided in reference tag "{}"'.format(ref_tag))
+    raise Exception(
+      'Invalid regex provided in reference tag "{}". The reference tag should be in the format '
+      '/some_regex/. Example: /^release.*/ would match all tags starting with "release" followed by any characters. '
+      'This follows the established expression patter used by CircleCi parameters such as filter: tags:.'.format(ref_tag)
+    )
 
-def get_previous_tagged_commit(ref_tag):
-  last_tag_hash = subprocess.run(
-    ['git', 'rev-list', '--tags', '--skip=1', '--max-count=1'],
+def get_previous_matching_tagged_commit(ref_tag):
+  """
+  Returns the commit id, and tag, of the previous tagged commit that matches ref_tag
+
+  :param ref_tag: A string representing the regex pattern to match tags against. It should be formatted as other regex patterns in CircleCi such as the 'filters: tags: regex'
+  :return: A tuple containing:
+      - str: The commit id of the previous tagged commit.
+      - str: The tag of the previous tagged commit.
+      Returns None if no matching tag is found.
+  """
+  # Get all tags reachable by this branch
+  all_tags = subprocess.run(
+    ['git', 'tag', '--sort=creatordate', '--merged'],
     check=True,
-    capture_output=True
-  ).stdout.decode('utf-8').strip()
+    capture_output=True).stdout.decode('utf-8').splitlines()
 
-  tag_label = subprocess.run(
-    ['git', 'describe', '--abbrev=0', '--tags', last_tag_hash],
-    check=True,
-    capture_output=True
-  ).stdout.decode('utf-8').strip()
-
-  is_match = compare_tags(ref_tag, tag_label)
-
-  if not is_match:
+  all_tags.pop(-1) # Remove the last entry as that is the currently tagged head commit. We don't need to compare it as we did that at the start
+  if not all_tags:
     return None
 
-  return last_tag_hash, tag_label
+  # Check that there exists a reachable tag matching the provided reference
+  if not compare_tags(ref_tag, *all_tags):
+    print('No commit found with a tag matching the reference "{}"'.format(ref_tag))
+    return None
+
+  the_tag = next((tag for tag in reversed(all_tags) if compare_tags(ref_tag, tag)), None)
+
+  the_commit = subprocess.run(
+    ['git', 'show-ref', '-s', the_tag],
+    check=True,
+    capture_output=True
+  ).stdout.decode('utf-8').strip()
+
+  return the_commit, the_tag
 
 
 def changed_files(base, head):
@@ -153,12 +181,13 @@ def create_parameters(output_path, config_path, head, base, ref_tag, head_tag, m
       'Head tag detected "{}". This is a tagged commit, a reference tag was supplied, and the current tag matches the provided reference tag. '
       'Finding previously tagged commit matching the provided reference tag "{}"'.format(head_tag, ref_tag)
     )
-    result = get_previous_tagged_commit(ref_tag) #Get the previous commit, and tag label with a matching tag, or 'None' if the previous tag doesn't match the reference
+
+    result = get_previous_matching_tagged_commit(ref_tag) #Get the previous commit, and tag label with a matching tag, or 'None' if the previous tag doesn't match the reference
     if result is not None:
       base, base_tag = result
       print('Base has been set to "{}" with the tag "{}"'.format(base, base_tag))
     else:
-      print('The previous tag did not match the provided reference tag. We will continue as normal.')
+      print('No tag found matching the provided reference tag, or there were no other tags reachable from this branch. We will continue as normal.')
 
   checkout(base)  # Checkout base revision to make sure it is available for comparison
   checkout(head)  # return to head commit
