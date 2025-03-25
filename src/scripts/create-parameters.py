@@ -47,7 +47,7 @@ def is_valid_format(string):
 
 def compare_tags(ref_tag, *tags):
   if is_valid_regex(ref_tag):
-    stripped_ref_tag = ref_tag.replace("/")
+    stripped_ref_tag = ref_tag.strip("/")
     if any(re.match(stripped_ref_tag, tag) for tag in tags):
       return True
     return False
